@@ -14,14 +14,56 @@ specific language governing permissions and limitations
 under the License.
 
 """
-import copy
 import datetime
 import json
 import logging
 
-from axiomapy.axiomaapi import PortfoliosAPI
+from axiomapy.axiomaapi import PortfoliosAPI, QuantityType, IdentifierType
 from axiomapy.axiomaexceptions import AxiomaRequestValidationError
 from axiomapy.odatahelpers import oDataFilterHelper as od
+
+
+class Quantity:
+    def __init__(self,
+                 value: float,
+                 scale: QuantityType,
+                 currency: str = None):
+        self.value = value
+        self.scale = scale
+        self.currency = currency
+
+    def __str__(self):
+        return f'Quantity: {self.value} {self.scale} {self.currency}'
+
+    def get_dict(self):
+        my_dict = dict(value=self.value,
+                       scale=self.scale.value)
+        if self.currency is not None:
+            my_dict['currency'] = self.currency
+        return my_dict
+
+
+class Identifier:
+    def __init__(self,
+                 identifier_type: IdentifierType,
+                 identifier_id: str):
+        self.identifier_type = identifier_type
+        self.identifier_id = identifier_id
+
+    def get_dict(self):
+        return dict(type=self.identifier_type.value,
+                    value=self.identifier_id)
+
+
+class Identifiers:
+    def __init__(self, identifiers: list):
+        self.identifiers = identifiers
+
+    def add_identifier(self, identifier: Identifier):
+        self.identifiers.append(identifier)
+
+    def get_identifiers(self):
+        return [i.get_dict() for i in self.identifiers]
 
 
 class Position:
@@ -36,27 +78,20 @@ class Position:
 
     :ivar _client_id: Unique identifier for the client.
     :type _client_id: str
-    :ivar _identifiers: List of related identifiers for the position, such as security
-    IDs. Defaults to None.
-    :type _identifiers: list
-    :ivar _quantity: Dictionary representing quantities or balances of financial
+    :ivar _identifiers: Identifiers object representing the position
+    :type _identifiers: Identifiers
+    :ivar _quantity: Quantity object representing quantities or balances of financial
     instruments.
-    :type _quantity: dict
-    :ivar _instrumentMapping: Mapping or description of the financial instrument type.
-    Defaults to 'Default'.
-    :type _instrumentMapping: str
+    :type _quantity: Quantity
     """
-    _client_id = None
-    _identifiers = None
-    _quantity = None
 
     def __init__(self,
                  client_id : str,
-                 identifiers : list = None,
-                 quantity : dict = None):
+                 identifiers : Identifiers = None,
+                 quantity : Quantity = None):
         self.client_id = client_id
-        self.identifiers = copy.copy(identifiers)
-        self.quantity = copy.copy(quantity)
+        self.identifiers = identifiers
+        self.quantity = quantity
 
     def __eq__(self, other):
         return self._client_id == other.client_id
@@ -82,34 +117,33 @@ class Position:
         self._client_id = value
 
     @property
-    def identifiers(self) -> list:
+    def identifiers(self) -> Identifiers:
         return self._identifiers
 
     @identifiers.setter
-    def identifiers(self, value: list) -> None:
+    def identifiers(self, value: Identifiers) -> None:
         self._identifiers = value
 
     @property
-    def quantity(self) -> dict:
+    def quantity(self) -> Quantity:
         return self._quantity
 
     @quantity.setter
-    def quantity(self, value: dict) -> None:
+    def quantity(self, value: Quantity) -> None:
         self._quantity = value
 
     def get_position(self) -> dict:
         if self._client_id is None or \
            self._identifiers is None or \
-           self._quantity is None or \
-           self._instrumentMapping is None:
+           self._quantity is None:
             raise ValueError('Must fill in all fields for position')
         return dict(client_id=self._client_id,
                     identifiers=self._identifiers,
-                    quantity=self._quantity,
-                    instrumentMapping=self._instrumentMapping)
+                    quantity=self._quantity)
 
     def __str__(self):
-        return f'Position: {self._client_id} : {self._quantity} of {self._identifiers}'
+        return f'Position: {self._client_id} : {self._quantity.get_dict()}' \
+               f'of {self._identifiers.get_identifiers()}'
 
 
 class Portfolio:
@@ -186,11 +220,11 @@ class Portfolio:
         self._portfolioName = value
 
     @property
-    def portfolioDate(self):
+    def date(self):
         return self._portfolioDate
 
-    @portfolioDate.setter
-    def portfolioDate(self, value : (str, datetime.date)):
+    @date.setter
+    def date(self, value : (str, datetime.date)):
         if isinstance(value, str):
             assert len(value) == 10, 'Date must be a string of format YYYY-MM-DD'
             value = datetime.date(int(value[:4]), int(value[5:7]), int(value[8:10]))
@@ -229,7 +263,7 @@ class Portfolio:
         Add or update a portfolio in Axioma Risk.
 
         This function attempts to add a portfolio defined by the instance's attributes
-        to Axioma Risk using the `post_portfolio` method. If the portfolio with the
+        to Axioma Risk using the `post_portfolio` method. If a portfolio with the
         same name already exists, it retrieves the existing portfolio's ID and updates
         it using the `put_portfolio` method. The portfolio's ID will be stored in the
         instance attribute `_portfolioId`.
@@ -241,7 +275,7 @@ class Portfolio:
             Risk API during either portfolio creation or update.
 
         :return: True if the portfolio was successfully added or updated in Axioma Risk.
-        :rtype: bool
+        :rtype: Boolean
         """
         portfolio_struct = dict(name=self._portfolioName,
                                 longName=self._description,
@@ -272,7 +306,7 @@ class Portfolio:
         self._portfolioId = pId
         return True
 
-    def fetch_positions_for_date(self, date: (str, datetime.date) = None) -> None:
+    def get_positions_for_date(self, date: (str, datetime.date) = None) -> None:
         if date is None and self._portfolioDate is None:
             raise ValueError('Must set portfolio date')
         if self._portfolioDate is None:
@@ -293,7 +327,7 @@ class Portfolio:
                 identifiers=p['identifiers'],
                 quantity=p['quantity']))
 
-    def get_portfolio(self, date: (str, datetime.date) = None) -> dict:
+    def __get_positions(self, date: (str, datetime.date) = None) -> dict:
         if date is None and self._portfolioDate is None:
             raise ValueError('Must set portfolio date')
         if self._portfolioDate is None:
@@ -308,8 +342,7 @@ class Portfolio:
 
     def put_positions(self) -> bool:
         """
-        Handles the addition, deletion, and updating of positions within a portfolio
-        in Axioma Risk.
+        Handles the updating of positions within a portfolio in Axioma Risk.
 
         The method is responsible for deleting existing portfolio positions for a
         specified date and replacing them with new positions provided. To improve
@@ -365,8 +398,8 @@ class Portfolio:
                 positions = []
                 for a in chunk:
                     positions.append(dict(clientId=a.client_id,
-                                          identifiers=a.identifiers,
-                                          quantity=a.quantity))
+                                          identifiers=a.identifiers.get_identifiers(),
+                                          quantity=a.quantity.get_dict()))
                 patch = PortfoliosAPI.patch_positions(
                     as_of_date=str(self._portfolioDate),
                     portfolio_id=self._portfolioId,
@@ -399,3 +432,36 @@ class Portfolio:
             positions = len(self._my_positions)
         return 'Portfolio: %s on %s, # of positions : %d' \
             % (self._portfolioName, self._portfolioDate, positions)
+
+    def get_position_dates(self):
+        if self._portfolioId is None:
+            self.put_positions()
+        r = PortfoliosAPI.get_position_dates(portfolio_id=self._portfolioId)
+        for d in r.json()['items']:
+            yield datetime.date(int(d['date'][:4]),
+                                int(d['date'][5:7]),
+                                int(d['date'][8:10]))
+
+    @classmethod
+    def get_all_portfolios(cls) -> list:
+        return_list = list()
+        all_portfolios = PortfoliosAPI.get_portfolios().json()
+        for i in all_portfolios['items']:
+            p = Portfolio(name=i['name'],
+                          description=i['description'])
+            p._portfolioId = int(i['id'])
+            return_list.append(p)
+        return return_list
+
+    @classmethod
+    def get_portfolio_by_name(cls, name : str):
+        r = PortfoliosAPI.get_portfolios(
+            filter_results=od.equals('name', name))
+        c = r.json()
+        if len(c['items']) == 0:
+            return None
+        pId = int(c['items'][0]['id'])
+        p = Portfolio(name=name,
+                      description=c['items'][0]['description'])
+        p._portfolioId = pId
+        return p
