@@ -49,17 +49,14 @@ class Position:
     _client_id = None
     _identifiers = None
     _quantity = None
-    _instrumentMapping = None
 
     def __init__(self,
                  client_id : str,
                  identifiers : list = None,
-                 quantity : dict = None,
-                 instrumentMapping : str = 'Default'):
+                 quantity : dict = None):
         self.client_id = client_id
         self.identifiers = copy.copy(identifiers)
         self.quantity = copy.copy(quantity)
-        self.instrumentMapping = instrumentMapping
 
     def __eq__(self, other):
         return self._client_id == other.client_id
@@ -100,14 +97,6 @@ class Position:
     def quantity(self, value: dict) -> None:
         self._quantity = value
 
-    @property
-    def instrumentMapping(self) -> str:
-        return self._instrumentMapping
-
-    @instrumentMapping.setter
-    def instrumentMapping(self, value: str) -> None:
-        self._instrumentMapping = value
-
     def get_position(self) -> dict:
         if self._client_id is None or \
            self._identifiers is None or \
@@ -118,6 +107,9 @@ class Position:
                     identifiers=self._identifiers,
                     quantity=self._quantity,
                     instrumentMapping=self._instrumentMapping)
+
+    def __str__(self):
+        return f'Position: {self._client_id} : {self._quantity} of {self._identifiers}'
 
 
 class Portfolio:
@@ -141,20 +133,24 @@ class Portfolio:
     :type _portfolioDate: datetime.date
     :ivar _portfolioId: The internal identifier of the portfolio in the external system.
     :type _portfolioId: int, optional
+    :ivar _benchmark: The benchmark to use for the portfolio.
+    :type _benchmark: str, optional
     """
 
     _portfolioName = None
     _description = None
     _currency = None
     _portfolioDate = None
-    _portfolioId = None
+    _portfolioId = None              # kept internally for tracking portfolio on AxR
+    _benchmark = None
 
     def __init__(self,
                  name : str,
-                 date : (str, datetime.date),
+                 date : (str, datetime.date) = None,
                  description : str = None,
                  currency : str = None,
-                 positions : list = None):
+                 positions : list = None,
+                 benchmark : str = None):
         self._description = description
         self._portfolioName = name
         self._currency = currency
@@ -163,6 +159,7 @@ class Portfolio:
             date = datetime.date(int(date[:4]), int(date[5:7]), int(date[8:10]))
         self._portfolioDate = date
         self._my_positions = sorted(positions) if positions is not None else []
+        self._benchmark = benchmark
 
     @property
     def description(self):
@@ -198,6 +195,14 @@ class Portfolio:
             assert len(value) == 10, 'Date must be a string of format YYYY-MM-DD'
             value = datetime.date(int(value[:4]), int(value[5:7]), int(value[8:10]))
         self._portfolioDate = value
+
+    @property
+    def benchmark(self) -> str or None:
+        return self._benchmark
+
+    @benchmark.setter
+    def benchmark(self, value : str):
+        self._benchmark = value
 
     @property
     def positions(self) -> list:
@@ -267,9 +272,35 @@ class Portfolio:
         self._portfolioId = pId
         return True
 
-    def get_portfolio(self) -> dict:
-        if self._portfolioDate is None:
+    def fetch_positions_for_date(self, date: (str, datetime.date) = None) -> None:
+        if date is None and self._portfolioDate is None:
             raise ValueError('Must set portfolio date')
+        if self._portfolioDate is None:
+            if isinstance(date, str):
+                assert len(date) == 10, 'Date must be a string of format YYYY-MM-DD'
+                date = datetime.date(int(date[:4]), int(date[5:7]), int(date[8:10]))
+            self._portfolioDate = date
+        if self._portfolioId is None:
+            self.put_portfolio()
+        r = PortfoliosAPI.get_positions_at_date(
+            portfolio_id=self._portfolioId,
+            as_of_date=str(self._portfolioDate)
+        )
+        self._my_positions = []
+        for p in r.json()['items']:
+            self._my_positions.append(Position(
+                client_id=p['clientId'],
+                identifiers=p['identifiers'],
+                quantity=p['quantity']))
+
+    def get_portfolio(self, date: (str, datetime.date) = None) -> dict:
+        if date is None and self._portfolioDate is None:
+            raise ValueError('Must set portfolio date')
+        if self._portfolioDate is None:
+            if isinstance(date, str):
+                assert len(date) == 10, 'Date must be a string of format YYYY-MM-DD'
+                date = datetime.date(int(date[:4]), int(date[5:7]), int(date[8:10]))
+            self._portfolioDate = date
         return dict(
             portfolioDate=self._portfolioDate,
             positions=[p.get_position() for p in self._my_positions]
@@ -361,3 +392,10 @@ class Portfolio:
             return False
 
         return True
+
+    def __str__(self):
+        positions = 0
+        if self._my_positions is not None:
+            positions = len(self._my_positions)
+        return 'Portfolio: %s on %s, # of positions : %d' \
+            % (self._portfolioName, self._portfolioDate, positions)
