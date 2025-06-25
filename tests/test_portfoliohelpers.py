@@ -1,6 +1,7 @@
 import datetime
 import logging
 import sys
+import unittest
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 
@@ -132,3 +133,7 @@ class TestPortfolio(TestCase):
         ]
         expected_str = "Portfolio: Test Portfolio on 2025-06-25, # of positions : 2"
         self.assertEqual(expected_str, str(self.portfolio))
+
+
+if __name__ == "__main__":
+    unittest.main()
