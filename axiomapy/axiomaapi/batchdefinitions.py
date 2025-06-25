@@ -82,3 +82,70 @@ class BatchDefinitionsAPI:
             url, return_response=return_response, headers=headers
         )
         return response
+
+    @staticmethod
+    def post_batch_definition(
+        batch_definition: dict, headers: dict = None, return_response: bool = False,
+    ):
+        """This method creates a new batch definition
+
+        Args:
+            batch_definition: parameters for the new batch definition
+            headers: Optional headers if any needed (Correlation ID , Content-Encoding)
+            return_response: If set to true, the response will be returned
+
+        Returns:
+            Success message once created. Code 201
+        """
+        url = "/batch-definitions"
+        _logger.info(f"Posting to {url}")
+        response = AxiomaSession.current._post(
+            url, batch_definition, return_response=return_response, headers=headers
+        )
+        return response
+
+    @staticmethod
+    def put_batch_definition(
+        batch_definition_id: int,
+        batch_definition: dict,
+        headers: dict = None,
+        return_response: bool = False,
+    ):
+        """This method updates an existing batch definition
+
+        Args:
+            batch_definition_id: id for batch definition to be updated
+            batch_definition: parameters for updated batch definition
+            headers: Optional headers if any needed (Correlation ID , Content-Encoding)
+            return_response: If set to true, the response will be returned
+
+        Returns:
+            Success message once updated. Code 204
+        """
+        url = f"/batch-definitions/{batch_definition_id}"
+        _logger.info(f"Putting to {url}")
+        response = AxiomaSession.current._put(
+            url, batch_definition, return_response=return_response, headers=headers
+        )
+        return response
+
+    @staticmethod
+    def delete_batch_definition(
+        batch_definition_id: int, headers: dict = None, return_response: bool = False,
+    ):
+        """This method deletes a batch definition
+
+        Args:
+            batch_definition_id: id of batch definition to be deleted
+            headers: Optional headers if any needed (Correlation ID)
+            return_response: If set to true, the response will be returned
+
+        Returns:
+            Success message once deleted. Code 204
+        """
+        url = f"/batch-definitions/{batch_definition_id}"
+        _logger.info(f"Deleting at {url}")
+        response = AxiomaSession.current._delete(
+            url, return_response=return_response, headers=headers
+        )
+        return response
