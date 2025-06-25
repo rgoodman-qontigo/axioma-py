@@ -247,6 +247,12 @@ class Portfolio:
         self._my_positions = sorted(self._my_positions)
 
     def del_position(self, position : (str, Position)) -> None:
+        """
+        Delete a position by client_id or Position object.
+
+        :param position: Can be a str containing a client_id or a Position object.
+        :return: None
+        """
         if isinstance(position, Position):
             position = position.client_id
         for p in self._my_positions:
@@ -255,7 +261,7 @@ class Portfolio:
                 break
 
     @positions.setter
-    def positions(self, value: list) -> None:
+    def positions(self, value: list[Position]) -> None:
         self._my_positions = sorted(value)
 
     def put_portfolio(self) -> bool:
@@ -293,7 +299,6 @@ class Portfolio:
                 pId = int(c['items'][0]['id'])
                 try:
                     r = PortfoliosAPI.put_portfolio(pId, portfolio=portfolio_struct)
-                    assert r.json()['items'][0]['id'] == pId
                 except AxiomaRequestValidationError as e:
                     logging.exception(
                         'Failed to update portfolio in Axioma Risk %s: %s',
@@ -309,7 +314,7 @@ class Portfolio:
     def get_positions_for_date(self, date: (str, datetime.date) = None) -> None:
         if date is None and self._portfolioDate is None:
             raise ValueError('Must set portfolio date')
-        if self._portfolioDate is None:
+        if date is not None:
             if isinstance(date, str):
                 assert len(date) == 10, 'Date must be a string of format YYYY-MM-DD'
                 date = datetime.date(int(date[:4]), int(date[5:7]), int(date[8:10]))
@@ -412,7 +417,7 @@ class Portfolio:
                         i + 1, len(chunked_positions), len(chunk), self._portfolioId,
                         self._portfolioDate, patch.status_code)
                 else:
-                    logging.info(
+                    logging.error(
                         'Failed to patch positions chunk %s of %s with %s \
                         positions for portfolio %s on date %s with status code %s',
                         i + 1, len(chunked_positions), len(chunk), self._portfolioId,
@@ -438,9 +443,10 @@ class Portfolio:
             self.put_positions()
         r = PortfoliosAPI.get_position_dates(portfolio_id=self._portfolioId)
         for d in r.json()['items']:
-            yield datetime.date(int(d['date'][:4]),
-                                int(d['date'][5:7]),
-                                int(d['date'][8:10]))
+            if 'date' in d:
+                yield datetime.date(int(d['date'][:4]),
+                                    int(d['date'][5:7]),
+                                    int(d['date'][8:10]))
 
     @classmethod
     def get_all_portfolios(cls) -> list:
