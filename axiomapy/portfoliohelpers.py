@@ -22,6 +22,8 @@ from axiomapy.axiomaapi import PortfoliosAPI, QuantityType, IdentifierType
 from axiomapy.axiomaexceptions import AxiomaRequestValidationError
 from axiomapy.odatahelpers import oDataFilterHelper as od
 
+logger = logging.getLogger(__name__)
+
 
 class Quantity:
     def __init__(self,
@@ -151,6 +153,33 @@ class Position:
                f' of {self._identifiers.get_identifiers()}'
 
 
+class Benchmark:
+    def __init__(self, name : str,
+                 identifiers : Identifiers = None):
+        self._name = name
+        self._identifiers = identifiers
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value: str):
+        self._name = value
+
+    @property
+    def identifiers(self) -> Identifiers:
+        return self._identifiers
+
+    @identifiers.setter
+    def identifiers(self, value: Identifiers) -> None:
+        self._identifiers = value
+
+    def __str__(self):
+        return f'Benchmark: {self._name}' \
+               f' {self._identifiers.get_identifiers()}'
+
+
 class Portfolio:
     """
     Represents a financial portfolio, managing its properties, positions, and
@@ -189,7 +218,7 @@ class Portfolio:
                  description : str = None,
                  currency : str = None,
                  positions : list = None,
-                 benchmark : str = None):
+                 benchmark : Benchmark = None):
         self._description = description
         self._portfolioName = name
         self._currency = currency
@@ -297,7 +326,7 @@ class Portfolio:
         except AxiomaRequestValidationError as e:
             c = (json.loads(e.content))
             if c['message'] == 'Duplicate Resource':
-                logging.info('Portfolio already exists--fetching existing portfolio')
+                logger.info('Portfolio already exists--fetching existing portfolio')
                 r = PortfoliosAPI.get_portfolios(
                     filter_results=od.equals('name', portfolio_struct['name']))
                 c = r.json()
@@ -305,14 +334,14 @@ class Portfolio:
                 try:
                     r = PortfoliosAPI.put_portfolio(pId, portfolio=portfolio_struct)
                 except AxiomaRequestValidationError as e:
-                    logging.exception(
+                    logger.exception(
                         'Failed to update portfolio in Axioma Risk %s: %s',
                         pId, e)
                     raise
             else:
-                logging.exception('Failed to add portfolio to Axioma Risk: %s', e)
+                logger.exception('Failed to add portfolio to Axioma Risk: %s', e)
                 raise
-        logging.info('Portfolio ID is %d', pId)
+        logger.info('Portfolio ID is %d', pId)
         self._portfolioId = pId
         return True
 
@@ -388,35 +417,35 @@ class Portfolio:
             if not self.put_portfolio():
                 return False
         try:
-            logging.info('Deleting positions for portfolio %s on date %s',
-                         self._portfolioId, self._portfolioDate)
+            logger.info('Deleting positions for portfolio %s on date %s',
+                        self._portfolioId, self._portfolioDate)
             delete_positions = PortfoliosAPI.delete_positions(
                 portfolio_id=self._portfolioId,
                 as_of_date=str(self._portfolioDate))
             if delete_positions.status_code in range(200, 299):
-                logging.info(
-                    'Successfully deleted positions for portfolio %s on date %s \
-                    with status code %s',
+                logger.info(
+                    'Successfully deleted positions for portfolio %s on date %s '
+                    'with status code %s',
                     self._portfolioId, self._portfolioDate,
                     delete_positions.status_code)
             else:
-                logging.error(
-                    'Delete positions failed for portfolio %s on date %s with status \
-                    code %s',
+                logger.error(
+                    'Delete positions failed for portfolio %s on date %s with status '
+                    'code %s',
                     self._portfolioId, self._portfolioDate,
                     delete_positions.status_code)
                 return False
         except Exception as ex:  # pylint: disable=broad-except
-            logging.exception(
+            logger.exception(
                 'Failed to delete positions for portfolio %s on date %s: %s',
                 self._portfolioId, self._portfolioDate, ex)
             return False
         chunk_size = 10000
         chunked_positions = [self._my_positions[i:i + chunk_size]
                              for i in range(0, len(self._my_positions), chunk_size)]
-        logging.info(
-            'Adding %s positions for portfolio %s on date %s in chunks of max \
-            %s assets',
+        logger.info(
+            'Adding %s positions for portfolio %s on date %s in chunks of max '
+            '%s assets',
             len(self._my_positions), self._portfolioId, self._portfolioDate,
             chunk_size)
         try:
@@ -432,20 +461,20 @@ class Portfolio:
                     positions_upsert=positions,
                     positions_remove=[])
                 if patch.status_code in range(200, 299):
-                    logging.info(
-                        'Successfully patched positions chunk %s of %s with %s \
-                        positions for portfolio %s on date %s with status code %s',
+                    logger.info(
+                        'Successfully patched positions chunk %s of %s with %s '
+                        'positions for portfolio %s on date %s with status code %s',
                         i + 1, len(chunked_positions), len(chunk), self._portfolioId,
                         self._portfolioDate, patch.status_code)
                 else:
-                    logging.error(
-                        'Failed to patch positions chunk %s of %s with %s \
-                        positions for portfolio %s on date %s with status code %s',
+                    logger.error(
+                        'Failed to patch positions chunk %s of %s with %s '
+                        'positions for portfolio %s on date %s with status code %s',
                         i + 1, len(chunked_positions), len(chunk), self._portfolioId,
                         self._portfolioDate, patch.status_code)
                     return False
         except Exception as ex:  # pylint: disable=broad-except
-            logging.exception(
+            logger.exception(
                 'Failed to load positions for portfolio %s on date %s: %s',
                 self._portfolioId, self._portfolioDate, ex)
             return False
@@ -488,7 +517,20 @@ class Portfolio:
         if len(c['items']) == 0:
             return None
         pId = int(c['items'][0]['id'])
+        if 'benchmark' in c['items'][0]:
+            b = Benchmark(name=c['items'][0]['benchmark']['name'])
+            b.identifiers = Identifiers()
+            for i in c['items'][0]['benchmark']['identifiers']:
+                my_identifier = Identifier(
+                    identifier_type=IdentifierType[i['type']],
+                    identifier_id=i['value']
+                )
+                b.identifiers.add_identifier(my_identifier)
+        else:
+            b = None
         p = Portfolio(name=name,
-                      description=c['items'][0]['description'])
+                      description=c['items'][0]['description'],
+                      currency=c['items'][0].get('defaultCurrency'),
+                      benchmark=b)
         p._portfolioId = pId
         return p

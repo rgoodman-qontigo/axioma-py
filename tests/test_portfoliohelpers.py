@@ -5,8 +5,11 @@ import unittest
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 
+from axiomapy.axiomaapi import QuantityType, IdentifierType
 from axiomapy.axiomaapi.portfolios import PortfoliosAPI
-from axiomapy.portfoliohelpers import Portfolio, Position
+from axiomapy.portfoliohelpers import (Portfolio, Position,
+                                       Quantity, Identifiers,
+                                       Identifier)
 
 
 class TestPortfolio(TestCase):
@@ -37,25 +40,44 @@ class TestPortfolio(TestCase):
                   return_value=MagicMock(json=lambda: {'items': []}))
     def test_get_positions_for_date_no_positions(self, mock_get_positions_at_date):
         self.portfolio._portfolioId = 42
-        self.portfolio.get_positions_for_date(date=self.portfolio_date)
+        n = self.portfolio.get_positions_for_date(date=self.portfolio_date)
         self.assertEqual([], self.portfolio.positions)
+        self.assertEqual(0, n)
         self.portfolio._portfolioId = None
 
     def test_add_position(self):
-        position = Position(client_id="001", identifiers=None, quantity=None)
+        position = Position(client_id="001",
+                            identifiers=Identifiers([Identifier(
+                                identifier_type=IdentifierType.TICKER,
+                                identifier_id='AAPL')]),
+                            quantity=Quantity(
+                                value=100,
+                                scale=QuantityType.NumberOfInstruments))
         self.portfolio.add_position(position)
         self.assertIn(position, self.portfolio.positions)
 
     def test_del_position_by_object(self):
-        position = Position(client_id="001", identifiers=None, quantity=None)
+        position = Position(client_id="002",
+                            identifiers=Identifiers([Identifier(
+                                identifier_type=IdentifierType.TICKER,
+                                identifier_id='ZOOM')]),
+                            quantity=Quantity(
+                                value=100,
+                                scale=QuantityType.NumberOfInstruments))
         self.portfolio.add_position(position)
         self.portfolio.del_position(position)
         self.assertNotIn(position, self.portfolio.positions)
 
     def test_del_position_by_client_id(self):
-        position = Position(client_id="001", identifiers=None, quantity=None)
+        position = Position(client_id="003",
+                            identifiers=Identifiers([Identifier(
+                                identifier_type=IdentifierType.TICKER,
+                                identifier_id='INGP')]),
+                            quantity=Quantity(
+                                value=100,
+                                scale=QuantityType.NumberOfInstruments))
         self.portfolio.add_position(position)
-        self.portfolio.del_position("001")
+        self.portfolio.del_position("003")
         self.assertNotIn(position, self.portfolio.positions)
 
     def test_portfolio_name_property(self):
@@ -126,13 +148,37 @@ class TestPortfolio(TestCase):
         result = self.portfolio.put_positions()
         self.assertTrue(result)
 
+    def test_get_no_portfolio(self):
+        with patch.object(PortfoliosAPI, 'get_portfolios',
+                          return_value=MagicMock(status_code=404)):
+            portfolio = Portfolio.get_portfolio_by_name("Nonexistent Portfolio")
+            self.assertIsNone(portfolio)
+
     def test_str_representation(self):
         self.portfolio.positions = [
-            Position(client_id="001", identifiers=None, quantity=None),
-            Position(client_id="002", identifiers=None, quantity=None)
+            Position(client_id="001",
+                     identifiers=Identifiers([Identifier(
+                         identifier_type=IdentifierType.TICKER,
+                         identifier_id='ZOOM')]),
+                     quantity=Quantity(
+                         value=100,
+                         scale=QuantityType.NumberOfInstruments)),
+            Position(client_id="002",
+                     identifiers=Identifiers([Identifier(
+                         identifier_type=IdentifierType.TICKER,
+                         identifier_id='IBM')]),
+                     quantity=Quantity(
+                         value=100,
+                         scale=QuantityType.NumberOfInstruments)),
         ]
         expected_str = "Portfolio: Test Portfolio on 2025-06-25, # of positions : 2"
         self.assertEqual(expected_str, str(self.portfolio))
+        expected_str = "Position: 001 : {'value': 100.0, 'scale': " \
+            "'NumberOfInstruments'} of [{'type': 'TICKER', 'value': 'ZOOM'}]"
+        self.assertEqual(expected_str, str(self.portfolio.positions[0]))
+        expected_str = "Position: 002 : {'value': 100.0, 'scale': " \
+            "'NumberOfInstruments'} of [{'type': 'TICKER', 'value': 'IBM'}]"
+        self.assertEqual(expected_str, str(self.portfolio.positions[1]))
 
 
 if __name__ == "__main__":
