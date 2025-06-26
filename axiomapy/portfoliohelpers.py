@@ -560,7 +560,7 @@ class Portfolio:
                                     int(d['date'][5:7]),
                                     int(d['date'][8:10]))
 
-    def add_valuation(self, valuation : Valuation,
+    def set_valuation(self, valuation : Valuation,
                       date: (str, datetime.date) = None) -> int:
         self._valuation = valuation
         if date is None and self._portfolioDate is None:
