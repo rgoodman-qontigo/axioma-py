@@ -169,15 +169,21 @@ class TestPortfolio(TestCase):
                          identifier_id='IBM')]),
                      quantity=Quantity(
                          value=100,
-                         scale=QuantityType.NumberOfInstruments)),
+                         scale=QuantityType.NumberOfInstruments),
+                     description='IBM Equity',
+                     attributes={"Fund": "Sample Fund", "Strategy": "Fundamental"})
         ]
+        self.portfolio._portfolioDate = datetime.date(2025, 6, 25)
         expected_str = "Portfolio: Test Portfolio on 2025-06-25, # of positions : 2"
         self.assertEqual(expected_str, str(self.portfolio))
-        expected_str = "Position: 001 : {'value': 100.0, 'scale': " \
-            "'NumberOfInstruments'} of [{'type': 'TICKER', 'value': 'ZOOM'}]"
+        expected_str = "Position: 001 {'value': 100.0, " \
+                       "'scale': 'NumberOfInstruments'} of " \
+                       "[{'type': 'TICKER', 'value': 'ZOOM'}]"
         self.assertEqual(expected_str, str(self.portfolio.positions[0]))
-        expected_str = "Position: 002 : {'value': 100.0, 'scale': " \
-            "'NumberOfInstruments'} of [{'type': 'TICKER', 'value': 'IBM'}]"
+        expected_str = "Position: 002 IBM Equity {'value': 100.0, " \
+                       "'scale': 'NumberOfInstruments'} of " \
+                       "[{'type': 'TICKER', 'value': 'IBM'}] " \
+                       "{'Fund': 'Sample Fund', 'Strategy': 'Fundamental'}"
         self.assertEqual(expected_str, str(self.portfolio.positions[1]))
 
 

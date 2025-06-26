@@ -94,11 +94,15 @@ class Position:
 
     def __init__(self,
                  client_id : str,
+                 description : str = None,
                  identifiers : Identifiers = None,
-                 quantity : Quantity = None):
+                 quantity : Quantity = None,
+                 attributes : dict = None):
         self.client_id = client_id
+        self.description = description
         self.identifiers = identifiers
         self.quantity = quantity
+        self.attributes = attributes
 
     def __eq__(self, other):
         return self._client_id == other.client_id
@@ -139,18 +143,40 @@ class Position:
     def quantity(self, value: Quantity) -> None:
         self._quantity = value
 
+    @property
+    def description(self) -> str:
+        return self._description
+
+    @description.setter
+    def description(self, value: str) -> None:
+        self._description = value
+
+    @property
+    def attributes(self) -> dict:
+        return self._attributes
+
+    @attributes.setter
+    def attributes(self, value: dict) -> None:
+        self._attributes = value
+
     def get_position(self) -> dict:
         if self._client_id is None or \
-           self._identifiers is None or \
-           self._quantity is None:
+                self._identifiers is None or \
+                self._quantity is None:
             raise ValueError('Must fill in all fields for position')
         return dict(client_id=self._client_id,
                     identifiers=self._identifiers,
                     quantity=self._quantity)
 
     def __str__(self):
-        return f'Position: {self._client_id} : {self._quantity.get_dict()}' \
-               f' of {self._identifiers.get_identifiers()}'
+        my_string = f'Position: {self._client_id} '
+        if self._description is not None:
+            my_string += f'{self._description} '
+        my_string += f'{self._quantity.get_dict()} of ' \
+            f'{self._identifiers.get_identifiers()} '
+        if self._attributes is not None:
+            my_string += f'{str(self._attributes)}'
+        return my_string.strip()
 
 
 class Benchmark:
@@ -180,6 +206,36 @@ class Benchmark:
                f' {self._identifiers.get_identifiers()}'
 
 
+class Valuation:
+    def __init__(self,
+                 aum : float,
+                 scale : QuantityType,
+                 net_value : float,
+                 long_aum : float = None,
+                 short_aum : float = None,
+                 gross_aum : float = None,
+                 number_of_units : float = None):
+        self.aum = aum
+        self.net_value = net_value
+        self.scale = scale
+        self.long_aum = long_aum
+        self.short_aum = short_aum
+        self.gross_aum = gross_aum
+        self.number_of_units = number_of_units
+
+    def get_dict(self):
+        my_dict = dict(aum=self.aum,
+                       netAssetValue=self.net_value,
+                       aumScale=self.scale.value)
+        if self.long_aum is not None:
+            my_dict['longAum'] = self.long_aum
+        if self.short_aum is not None:
+            my_dict['shortAum'] = self.short_aum
+        if self.gross_aum is not None:
+            my_dict['grossAum'] = self.gross_aum
+        return my_dict
+
+
 class Portfolio:
     """
     Represents a financial portfolio, managing its properties, positions, and
@@ -202,7 +258,7 @@ class Portfolio:
     :ivar _portfolioId: The internal identifier of the portfolio in the external system.
     :type _portfolioId: int, optional
     :ivar _benchmark: The benchmark to use for the portfolio.
-    :type _benchmark: str, optional
+    :type _benchmark: Benchmark, optional
     """
 
     _portfolioName = None
@@ -211,6 +267,7 @@ class Portfolio:
     _portfolioDate = None
     _portfolioId = None              # kept internally for tracking portfolio on AxR
     _benchmark = None
+    _valuation = None
 
     def __init__(self,
                  name : str,
@@ -263,6 +320,7 @@ class Portfolio:
             assert len(value) == 10, 'Date must be a string of format YYYY-MM-DD'
             value = datetime.date(int(value[:4]), int(value[5:7]), int(value[8:10]))
         self._portfolioDate = value
+        self._valuation = None
 
     @property
     def benchmark(self) -> str or None:
@@ -358,7 +416,9 @@ class Portfolio:
             if isinstance(date, str):
                 assert len(date) == 10, 'Date must be a string of format YYYY-MM-DD'
                 date = datetime.date(int(date[:4]), int(date[5:7]), int(date[8:10]))
-            self._portfolioDate = date
+            if date != self._portfolioDate:
+                self._portfolioDate = date
+                self._valuation = None
         if self._portfolioId is None:
             self.put_portfolio()
         r = PortfoliosAPI.get_positions_at_date(
@@ -389,7 +449,9 @@ class Portfolio:
             if isinstance(date, str):
                 assert len(date) == 10, 'Date must be a string of format YYYY-MM-DD'
                 date = datetime.date(int(date[:4]), int(date[5:7]), int(date[8:10]))
-            self._portfolioDate = date
+            if date != self._portfolioDate:
+                self._portfolioDate = date
+                self._valuation = None
         return dict(
             portfolioDate=self._portfolioDate,
             positions=[p.get_position() for p in self._my_positions]
@@ -497,6 +559,20 @@ class Portfolio:
                 yield datetime.date(int(d['date'][:4]),
                                     int(d['date'][5:7]),
                                     int(d['date'][8:10]))
+
+    def add_valuation(self, valuation : Valuation,
+                      date: (str, datetime.date) = None) -> int:
+        self._valuation = valuation
+        if date is None and self._portfolioDate is None:
+            raise ValueError('Must set portfolio date')
+        if self._portfolioDate is None:
+            if isinstance(date, str):
+                assert len(date) == 10, 'Date must be a string of format YYYY-MM-DD'
+                date = datetime.date(int(date[:4]), int(date[5:7]), int(date[8:10]))
+            if date != self._portfolioDate:
+                self._portfolioDate = date
+        PortfoliosAPI.put_valuation(self._portfolioId,
+                                    str(self._portfolioDate), valuation.get_dict())
 
     @classmethod
     def get_all_portfolios(cls) -> list:
