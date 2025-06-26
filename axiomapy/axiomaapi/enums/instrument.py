@@ -26,6 +26,7 @@ class IdentifierType(EnumBase):
 
     ISIN = "ISIN"
     TICKER = "TICKER"
+    Ticker = 'Ticker'
     SEDOL = "SEDOL"
     CUSIP = "CUSIP"
     Currency = "Currency"

@@ -28,7 +28,7 @@ class Quantity:
                  value: float,
                  scale: QuantityType,
                  currency: str = None):
-        self.value = value
+        self.value = float(value)
         self.scale = scale
         self.currency = currency
 
@@ -56,14 +56,19 @@ class Identifier:
 
 
 class Identifiers:
-    def __init__(self, identifiers: list):
+    def __init__(self, identifiers: (list, None) = None):
         self.identifiers = identifiers
+        if identifiers is None:
+            self.identifiers = list()
 
     def add_identifier(self, identifier: Identifier):
         self.identifiers.append(identifier)
 
     def get_identifiers(self):
         return [i.get_dict() for i in self.identifiers]
+
+    def __str__(self):
+        return f'Identifiers: {self.get_identifiers()}'
 
 
 class Position:
@@ -143,7 +148,7 @@ class Position:
 
     def __str__(self):
         return f'Position: {self._client_id} : {self._quantity.get_dict()}' \
-               f'of {self._identifiers.get_identifiers()}'
+               f' of {self._identifiers.get_identifiers()}'
 
 
 class Portfolio:
@@ -311,7 +316,13 @@ class Portfolio:
         self._portfolioId = pId
         return True
 
-    def get_positions_for_date(self, date: (str, datetime.date) = None) -> None:
+    def get_positions_for_date(self, date: (str, datetime.date) = None) -> int:
+        """
+        Fills the positions of the portfolio with the positions for a specified date.
+
+        :param date: Date to get positions for. YYYY-MM-DD or date object.
+        :return: Number of positions in the portfolio after loading.
+        """
         if date is None and self._portfolioDate is None:
             raise ValueError('Must set portfolio date')
         if date is not None:
@@ -327,10 +338,20 @@ class Portfolio:
         )
         self._my_positions = []
         for p in r.json()['items']:
+            identifiers = Identifiers()
+            for ident in p['identifiers']:
+                my_identifier = Identifier(
+                    identifier_type=IdentifierType[ident['type']],
+                    identifier_id=ident['value'])
+                identifiers.add_identifier(my_identifier)
             self._my_positions.append(Position(
                 client_id=p['clientId'],
-                identifiers=p['identifiers'],
-                quantity=p['quantity']))
+                identifiers=identifiers,
+                quantity=Quantity(scale=QuantityType[p['quantity']['scale']],
+                                  value=p['quantity']['value'],
+                                  currency=p.get('currency', None))))
+        self._my_positions = sorted(self._my_positions)
+        return len(self._my_positions)
 
     def __get_positions(self, date: (str, datetime.date) = None) -> dict:
         if date is None and self._portfolioDate is None:
