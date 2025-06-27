@@ -26,6 +26,21 @@ logger = logging.getLogger(__name__)
 
 
 class Quantity:
+    """
+    Represents a quantity with a value, scale, and an optional currency.
+
+    This class allows for representing physical or abstract quantities with a specific
+    unit of measurement (`scale`) and optionally a designated `currency`. It provides
+    a method for string representation as well as a method to output the quantity as
+    a dictionary.
+
+    :ivar value: The numerical value of the quantity.
+    :type value: float
+    :ivar scale: The measurement unit or type of the quantity.
+    :type scale: QuantityType
+    :ivar currency: (Optional) The currency associated with the quantity, if applicable.
+    :type currency: str
+    """
     def __init__(self,
                  value: float,
                  scale: QuantityType,
@@ -38,6 +53,17 @@ class Quantity:
         return f'Quantity: {self.value} {self.scale} {self.currency}'
 
     def get_dict(self):
+        """
+        Constructs and returns a dictionary representation of the object with specific
+        keys and their assigned values.
+
+        This dict includes ``value``, ``scale``, and optionally ``currency`` if it is
+        not None.
+
+        :return: A dictionary containing the object's value, scale, and optionally
+        currency.
+        :rtype: dict
+        """
         my_dict = dict(value=self.value,
                        scale=self.scale.value)
         if self.currency is not None:
@@ -46,18 +72,49 @@ class Quantity:
 
 
 class Identifier:
+    """
+    Represents an identifier with a specific type and value.
+
+    This class is used to encapsulate an identifier that includes a type and
+    a corresponding value. It provides a method to retrieve the identifier's
+    information in dictionary format.
+
+    :ivar ident: The type of the identifier.
+    :type ident: IdentifierType
+    :ivar value: The value associated with the identifier.
+    :type value: str
+    """
     def __init__(self,
-                 identifier_type: IdentifierType,
-                 identifier_id: str):
-        self.identifier_type = identifier_type
-        self.identifier_id = identifier_id
+                 ident: IdentifierType,
+                 value: str):
+        self.ident = ident
+        self.value = value
 
     def get_dict(self):
-        return dict(type=self.identifier_type.value,
-                    value=self.identifier_id)
+        """
+        Constructs and returns a dictionary representation of the object with specific
+        keys representing the type and value.
+
+        :return: A dictionary containing ``type`` and ``value`` as keys with their
+                 corresponding values from the object.
+        :rtype: dict
+        """
+        return dict(type=self.ident.value,
+                    value=self.value)
 
 
 class Identifiers:
+    """
+    Represents a collection of identifiers.
+
+    This class manages a collection of identifiers. It allows adding new identifiers,
+    retrieving all identifiers in a dictionary format, and provides a string
+    representation of the collection.
+
+    :ivar identifiers: A list that holds `Identifier` objects. It is initialized
+                       to an empty list if no identifiers are provided.
+    :type identifiers: list
+    """
     def __init__(self, identifiers: (list, None) = None):
         self.identifiers = identifiers
         if identifiers is None:
@@ -160,6 +217,19 @@ class Position:
         self._attributes = value
 
     def get_position(self) -> dict:
+        """
+        Retrieves the positional data for a specific entity as a dictionary.
+
+        The `get_position` method constructs and returns a dictionary containing
+        information about the current position, provided that all necessary fields
+        have been properly filled in. If any required fields are missing, an
+        exception will be raised.
+
+        :raises ValueError: Raised if required fields (client_id, identifiers, or
+            quantity) are not initialized.
+        :return: A dictionary containing positional data.
+        :rtype: dict
+        """
         if self._client_id is None or \
                 self._identifiers is None or \
                 self._quantity is None:
@@ -245,7 +315,7 @@ class Portfolio:
     portfolio, including its metadata (e.g., name, description, currency, and date)
     and associated positions. The portfolio can interact with Axioma Risk APIs to
     manage its state. Positions can also be dynamically managed (added or removed)
-    and accurately tracked.
+    and kept in an ordered list.
 
     :ivar _portfolioName: The name of the portfolio.
     :type _portfolioName: str
@@ -391,7 +461,7 @@ class Portfolio:
                 c = r.json()
                 pId = int(c['items'][0]['id'])
                 try:
-                    r = PortfoliosAPI.put_portfolio(pId, portfolio=portfolio_struct)
+                    PortfoliosAPI.put_portfolio(pId, portfolio=portfolio_struct)
                 except AxiomaRequestValidationError as e:
                     logger.exception(
                         'Failed to update portfolio in Axioma Risk %s: %s',
@@ -431,8 +501,8 @@ class Portfolio:
             identifiers = Identifiers()
             for ident in p['identifiers']:
                 my_identifier = Identifier(
-                    identifier_type=IdentifierType[ident['type']],
-                    identifier_id=ident['value'])
+                    ident=IdentifierType[ident['type']],
+                    value=ident['value'])
                 identifiers.add_identifier(my_identifier)
             self._my_positions.append(Position(
                 client_id=p['clientId'],
@@ -552,8 +622,18 @@ class Portfolio:
             % (self._portfolioName, self._portfolioDate, positions)
 
     def get_position_dates(self):
+        """
+        Retrieves the list of position dates associated with a portfolio. This
+        function ensures that the portfolio has a portfolio ID before attempting
+        to retrieve the position dates. It then queries the external API to fetch
+        the list of dates when positions exist for the specified portfolio. Each
+        date value is yielded as a `datetime.date` object.
+
+        :return: Generator that yields position dates as `datetime.date` objects.
+        :rtype: Generator[datetime.date, None, None]
+        """
         if self._portfolioId is None:
-            self.put_positions()
+            self.put_portfolio()
         r = PortfoliosAPI.get_position_dates(portfolio_id=self._portfolioId)
         for d in r.json()['items']:
             if 'date' in d:
@@ -578,6 +658,18 @@ class Portfolio:
 
     @classmethod
     def get_all_portfolios(cls) -> list:
+        """
+        Retrieves all portfolios from Axioma Risk and returns them as a list of
+        Portfolio objects.
+
+        This method uses PortfoliosAPI to fetch all available portfolios from an
+        external API endpoint. Each portfolio is then parsed and structured into
+        a `Portfolio` object before being appended to the result.
+
+        :return: A list of dateless Portfolio objects initialized from the
+        retrieved data.
+        :rtype: list
+        """
         return_list = list()
         all_portfolios = PortfoliosAPI.get_portfolios().json()
         for i in all_portfolios['items']:
@@ -589,6 +681,20 @@ class Portfolio:
 
     @classmethod
     def get_portfolio_by_name(cls, name : str):
+        """
+        Retrieves a portfolio by its name from Axioma Risk.
+
+        This method queries the Portfolios API to fetch details of a portfolio
+        using the provided name. If a matching portfolio is found, it assembles
+        the data into a Portfolio object and returns it. If no matching
+        portfolio exists, it returns None.
+
+        :param name: The name of the portfolio to retrieve.
+        :type name: str
+        :return: An instance of the Portfolio class if a portfolio with the
+                 specified name exists, or None if not found.
+        :rtype: Portfolio or None
+        """
         r = PortfoliosAPI.get_portfolios(
             filter_results=od.equals('name', name))
         c = r.json()
@@ -600,8 +706,8 @@ class Portfolio:
             b.identifiers = Identifiers()
             for i in c['items'][0]['benchmark']['identifiers']:
                 my_identifier = Identifier(
-                    identifier_type=IdentifierType[i['type']],
-                    identifier_id=i['value']
+                    ident=IdentifierType[i['type']],
+                    value=i['value']
                 )
                 b.identifiers.add_identifier(my_identifier)
         else:
