@@ -52,7 +52,7 @@ class AnalysisDefinition:
             raise ValueError('Analysis Definition name cannot be null')
         try:
             r = AnalysisDefinitionAPI.get_analysis_definitions(
-                filter_results=od.equals('name', name))
+                filter_results=od.equals('name', name) + od.and_str + od.equals('team', 'Axioma Standard Views (Readonly)'))
             c = r.json()
             analysisDefinitionId = int(c['items'][0]['id'])
         except AxiomaRequestValidationError as e:
@@ -136,34 +136,40 @@ class BatchDefinition:
         for item in portfolio_groups:
             if isinstance(item, portfoliogrouphelpers.PortfolioGroup):
                 if item._portfolioGroupId is None:
-                    item.portfoliogrouphelpers.put_portfolio()
+                    item.portfoliogrouphelpers.put_portfolio_group()
+                if self._portfolioGroups==None:
+                    self._portfolioGroups=[]
                 self._portfolioGroups.append(item._portfolioGroupId)
             else:
                 raise ValueError(f'{item.portfolioName} not found') 
+        self._portfolioGroups=list(set(self._portfolioGroups))
         self._portfolioGroups = sorted(self._portfolioGroups)
                 
-    def remove_portfolio(self, portfolio_group: (str, portfoliogrouphelpers.PortfolioGroup)) -> None: #check syntax
+    def remove_portfolio_group(self, portfolio_group: (int, portfoliogrouphelpers.PortfolioGroup)) -> None: #check syntax
         if isinstance(portfolio_group, portfoliogrouphelpers.PortfolioGroup):
             portfolio_group = portfolio_group._portfolioGroupId
         for p in self._portfolioGroups:
-            if p._portfolioGroupId == portfolio_group:
-                self._portfolios.remove(p)
+            if p == portfolio_group:
+                self._portfolioGroups.remove(p)
                 break
             
     def add_analysis_definitions_to_list(self, analysis_definitions : list) -> None:  
         for item in analysis_definitions:
             if isinstance(item, AnalysisDefinition):
                 item.get_analysis_definition_id()
+                if self._analysisDefinitions==None:
+                    self._analysisDefinitions=[]
                 self._analysisDefinitions.append(item._analysisDefinitionId)
             else:
                 raise ValueError(f'{item.analysisDefinitionName} not found') 
+        self._analysisDefinitions=list(set(self._analysisDefinitions))
         self._analysisDefinitions = sorted(self._analysisDefinitions)
                 
-    def remove_analysis_definition(self, analysis_definition: (str, AnalysisDefinition)) -> None:
+    def remove_analysis_definition(self, analysis_definition: (int, AnalysisDefinition)) -> None:
         if isinstance(analysis_definition, AnalysisDefinition):
-            analysis_definition = analysis_definition._analysisDefinitionsId
+            analysis_definition = analysis_definition._analysisDefinitionId
         for item in self._analysisDefinitions:
-            if item._analysisDefinitionId == analysis_definition:
+            if item == analysis_definition:
                 self._analysisDefinitions.remove(item)
                 break
             
@@ -178,13 +184,45 @@ class BatchDefinition:
             batchDefinitionId = int(c['items'][0]['id'])
         except AxiomaRequestValidationError as e:
             logging.exception(
-                'A Batch Definition with name : %s was not found %s',
+                 'A Batch Definition with name : %s was not found %s',
                 name, e)
             raise
         self._batchDefinitionId=batchDefinitionId
         return batchDefinitionId
    
-            
+    def put_batch_definition(self) -> bool:
+        """
+        """
+        batch_definition_struct = dict(name = self._batchDefinitionName,
+        description = self._description, 
+        portfolioGroupIds=self._portfolioGroups,
+        analysisDefinitionIds=self._analysisDefinitions)
+        try:
+            r = BatchDefinitionsAPI.post_batch_definition(batch_definition=batch_definition_struct)
+            _Id = int(r.headers['location'].split('/')[-1])
+        except AxiomaRequestValidationError as e:
+            c = (json.loads(e.content))
+            if c['message'] == 'Duplicate Resource':
+                logging.info('Batch definition already exists--fetching existing portfolio')
+                r = BatchDefinitionsAPI.get_batch_definitions(
+                    filter_results=od.equals('name', batch_definition_struct['name']))
+                c = r.json()
+                _Id = int(c['items'][0]['id'])
+                try:
+                    r = BatchDefinitionsAPI.put_portfolio(_Id, batch_definition=batch_definition_struct)
+                    print(r.json())
+                    assert r.json()['items'][0]['id'] == _Id
+                except AxiomaRequestValidationError as e:
+                    logging.exception(
+                        'Failed to update batch definition in Axioma Risk %s: %s',
+                        _Id, e)
+                    raise
+            else:
+                logging.exception('Failed to add batch definition to Axioma Risk: %s', e)
+                raise
+        logging.info('Batch definition ID is %d', _Id)
+        self._batchDefinitionId = _Id
+        return True     
     
             
     
