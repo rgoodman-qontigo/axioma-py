@@ -285,6 +285,7 @@ class Portfolio:
         self._portfolioDate = date
         self._my_positions = sorted(positions) if positions is not None else []
         self._benchmark = benchmark
+        self._valuation = None
 
     @property
     def description(self):
@@ -561,7 +562,7 @@ class Portfolio:
                                     int(d['date'][8:10]))
 
     def set_valuation(self, valuation : Valuation,
-                      date: (str, datetime.date) = None) -> int:
+                      date: (str, datetime.date) = None) -> bool:
         self._valuation = valuation
         if date is None and self._portfolioDate is None:
             raise ValueError('Must set portfolio date')
@@ -573,6 +574,7 @@ class Portfolio:
                 self._portfolioDate = date
         PortfoliosAPI.put_valuation(self._portfolioId,
                                     str(self._portfolioDate), valuation.get_dict())
+        return True
 
     @classmethod
     def get_all_portfolios(cls) -> list:
