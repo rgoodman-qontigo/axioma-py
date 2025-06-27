@@ -476,9 +476,11 @@ class Portfolio:
 
     def get_positions_for_date(self, date: (str, datetime.date) = None) -> int:
         """
-        Fills the positions of the portfolio with the positions for a specified date.
+        Fills the positions of the portfolio with the positions from Axioma Risk
+        for a specified date.
 
         :param date: Date to get positions for. YYYY-MM-DD or date object.
+        Optional, if not supplied, uses the portfolio date.
         :return: Number of positions in the portfolio after loading.
         """
         if date is None and self._portfolioDate is None:

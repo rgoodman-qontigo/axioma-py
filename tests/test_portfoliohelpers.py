@@ -48,8 +48,8 @@ class TestPortfolio(TestCase):
     def test_add_position(self):
         position = Position(client_id="001",
                             identifiers=Identifiers([Identifier(
-                                identifier_type=IdentifierType.TICKER,
-                                identifier_id='AAPL')]),
+                                ident=IdentifierType.TICKER,
+                                value='AAPL')]),
                             quantity=Quantity(
                                 value=100,
                                 scale=QuantityType.NumberOfInstruments))
@@ -59,8 +59,8 @@ class TestPortfolio(TestCase):
     def test_del_position_by_object(self):
         position = Position(client_id="002",
                             identifiers=Identifiers([Identifier(
-                                identifier_type=IdentifierType.TICKER,
-                                identifier_id='ZOOM')]),
+                                ident=IdentifierType.TICKER,
+                                value='ZOOM')]),
                             quantity=Quantity(
                                 value=100,
                                 scale=QuantityType.NumberOfInstruments))
@@ -71,8 +71,8 @@ class TestPortfolio(TestCase):
     def test_del_position_by_client_id(self):
         position = Position(client_id="003",
                             identifiers=Identifiers([Identifier(
-                                identifier_type=IdentifierType.TICKER,
-                                identifier_id='INGP')]),
+                                ident=IdentifierType.TICKER,
+                                value='INGP')]),
                             quantity=Quantity(
                                 value=100,
                                 scale=QuantityType.NumberOfInstruments))
@@ -158,15 +158,15 @@ class TestPortfolio(TestCase):
         self.portfolio.positions = [
             Position(client_id="001",
                      identifiers=Identifiers([Identifier(
-                         identifier_type=IdentifierType.TICKER,
-                         identifier_id='ZOOM')]),
+                         ident=IdentifierType.TICKER,
+                         value='ZOOM')]),
                      quantity=Quantity(
                          value=100,
                          scale=QuantityType.NumberOfInstruments)),
             Position(client_id="002",
                      identifiers=Identifiers([Identifier(
-                         identifier_type=IdentifierType.TICKER,
-                         identifier_id='IBM')]),
+                         ident=IdentifierType.TICKER,
+                         value='IBM')]),
                      quantity=Quantity(
                          value=100,
                          scale=QuantityType.NumberOfInstruments),
